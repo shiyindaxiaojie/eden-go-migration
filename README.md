@@ -3,18 +3,18 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/shiyindaxiaojie/eden-go-migration)](https://goreportcard.com/report/github.com/shiyindaxiaojie/eden-go-migration)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
-English | [中文](README_CN.md)
+English | [中文](README_zh-CN.md)
 
 **Eden Go Migration** is a lightweight, GORM-based database migration tool for Go. It is designed to simplify database version control and automatic migration processes, supporting automatic execution of SQL script files, version tracking, and checksum verification.
 
 ## ✨ Features
 
-- **Automatic Database Creation**: Automatically attempts to create the database if it does not exist.
-- **Version Control**: Automatically maintains the `sys_db_version` table to track executed migration scripts.
-- **Checksum Verification**: Prevents tampering with executed scripts.
-- **Transaction Support**: Each migration script is executed in an independent transaction to ensure atomicity.
-- **GORM Integration**: Seamlessly integrates with GORM, reusing existing database connection configurations.
-- **Easy to Use**: Integrate into existing projects with just a few lines of code.
+-   **Automatic Database Creation**: Automatically attempts to create the database if it does not exist.
+-   **Version Control**: Automatically maintains the `sys_db_version` table to track executed migration scripts.
+-   **Checksum Verification**: Prevents tampering with executed scripts.
+-   **Transaction Support**: Each migration script is executed in an independent transaction to ensure atomicity.
+-   **GORM Integration**: Seamlessly integrates with GORM, reusing existing database connection configurations.
+-   **Easy to Use**: Integrate into existing projects with just a few lines of code.
 
 ## 📦 Installation
 
@@ -30,8 +30,8 @@ Create a directory in your project (e.g., `scripts/sql`) and place SQL files nam
 
 Examples:
 
-- `scripts/sql/V1.0.0__Init_Schema.sql`
-- `scripts/sql/V1.0.1__Add_Users.sql`
+-   `scripts/sql/V1.0.0__Init_Schema.sql`
+-   `scripts/sql/V1.0.1__Add_Users.sql`
 
 ### 2. Code Integration
 
