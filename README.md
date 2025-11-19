@@ -9,7 +9,8 @@ English | [中文](README_zh-CN.md)
 
 ## ✨ Features
 
--   **Automatic Database Creation**: Automatically attempts to create the database if it does not exist.
+-   **Automatic Database Creation**: Automatically attempts to create the database if it does not exist (MySQL/PostgreSQL).
+-   **Multi-Database Support**: Supports MySQL, PostgreSQL, SQLite, and MariaDB.
 -   **Version Control**: Automatically maintains the `sys_db_version` table to track executed migration scripts.
 -   **Checksum Verification**: Prevents tampering with executed scripts.
 -   **Transaction Support**: Each migration script is executed in an independent transaction to ensure atomicity.
@@ -35,6 +36,8 @@ Examples:
 
 ### 2. Code Integration
 
+#### MySQL Example
+
 ```go
 package main
 
@@ -44,8 +47,9 @@ import (
 )
 
 func main() {
-	// 1. Configure Database
+	// Configure MySQL Database
 	cfg := &migration.DatabaseConfig{
+		Driver:       "mysql",
 		Host:         "localhost",
 		Port:         3306,
 		Username:     "root",
@@ -55,18 +59,16 @@ func main() {
 		MaxOpenConns: 100,
 	}
 
-	// 2. Initialize Database Connection
-	// InitDB automatically creates the database (if missing) and establishes connection
+	// Initialize Database Connection and run migrations
 	migDB, err := migration.InitDB(cfg)
 	if err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
 
-	// 3. Create Migration Service
+	// Create Migration Service
 	svc := migration.NewMigrationService(migDB)
 
-	// 4. Execute Migration
-	// Specify the directory path containing SQL scripts
+	// Execute Migration
 	if err := svc.Migrate("scripts/sql"); err != nil {
 		log.Fatalf("Database migration failed: %v", err)
 	}
@@ -75,19 +77,42 @@ func main() {
 }
 ```
 
+#### SQLite Example
+
+```go
+cfg := &migration.DatabaseConfig{
+	Driver: "sqlite",
+	DBName: "app.db", // SQLite database file
+}
+```
+
+#### PostgreSQL Example
+
+```go
+cfg := &migration.DatabaseConfig{
+	Driver:   "postgres",
+	Host:     "localhost",
+	Port:     5432,
+	Username: "postgres",
+	Password: "your_password",
+	DBName:   "your_dbname",
+}
+```
+
 ## ⚙️ Configuration
 
 The `DatabaseConfig` struct supports the following options:
 
-| Field          | Type     | Description              | Default       |
-| :------------- | :------- | :----------------------- | :------------ |
-| `Host`         | `string` | Database host address    | -             |
-| `Port`         | `int`    | Database port            | -             |
-| `Username`     | `string` | Database username        | -             |
-| `Password`     | `string` | Database password        | -             |
-| `DBName`       | `string` | Database name            | -             |
-| `MaxIdleConns` | `int`    | Maximum idle connections | 0 (default)   |
-| `MaxOpenConns` | `int`    | Maximum open connections | 0 (unlimited) |
+| Field          | Type     | Description                                 | Default       |
+| :------------- | :------- | :------------------------------------------ | :------------ |
+| `Driver`       | `string` | Database driver: mysql, postgres, sqlite    | mysql         |
+| `Host`         | `string` | Database host address                       | localhost     |
+| `Port`         | `int`    | Database port (3306 for MySQL, 5432 for PG) | -             |
+| `Username`     | `string` | Database username                           | -             |
+| `Password`     | `string` | Database password                           | -             |
+| `DBName`       | `string` | Database name (or file path for SQLite)     | -             |
+| `MaxIdleConns` | `int`    | Maximum idle connections                    | 0 (default)   |
+| `MaxOpenConns` | `int`    | Maximum open connections                    | 0 (unlimited) |
 
 ## 📄 License
 
