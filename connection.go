@@ -16,8 +16,6 @@ type DB struct {
 	*gorm.DB
 }
 
-
-
 // InitDB 初始化数据库连接
 func InitDB(cfg *DatabaseConfig) (*DB, error) {
 	// 使用标准 logger

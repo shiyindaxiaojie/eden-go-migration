@@ -149,6 +149,98 @@ func (s *MigrationService) executeSQLStatements(statements []string) error {
 	return nil
 }
 
+// validateChecksum 验证已执行脚本的校验和
+func (s *MigrationService) validateChecksum(file string, executed *Migration) error {
+	content, err := os.ReadFile(file)
+	if err != nil {
+		migrationLog("读取 SQL 文件失败: %v", err)
+		return fmt.Errorf("读取 SQL 文件失败: %v", err)
+	}
+
+	checksum := fmt.Sprintf("%x", md5.Sum(content))
+	if checksum != executed.Checksum {
+		migrationLog("SQL 文件 %s 已被修改，期望校验和: %s, 实际校验和: %s", filepath.Base(file), executed.Checksum, checksum)
+		migrationLog("警告：跳过校验和检查，继续执行")
+	}
+	return nil
+}
+
+// executeScriptFile 执行单个脚本文件
+func (s *MigrationService) executeScriptFile(file, version, description, filename string) error {
+	migrationLog("开始执行版本 %s", version)
+
+	// 读取SQL文件内容
+	content, err := os.ReadFile(file)
+	if err != nil {
+		migrationLog("读取 SQL 文件失败: %v", err)
+		return fmt.Errorf("读取 SQL 文件失败: %v", err)
+	}
+
+	// 开始事务
+	tx := s.db.Begin()
+	if tx.Error != nil {
+		return fmt.Errorf("开始事务失败: %v", tx.Error)
+	}
+
+	// 分割并执行SQL语句
+	startTime := time.Now()
+	statements := splitSQLStatements(string(content))
+	if err := s.executeSQLStatements(statements); err != nil {
+		tx.Rollback()
+		return fmt.Errorf("执行SQL失败: %v", err)
+	}
+
+	// 记录执行结果
+	migration := &Migration{
+		Version:       version,
+		Description:   description,
+		Script:        filename,
+		Checksum:      fmt.Sprintf("%x", md5.Sum(content)),
+		InstalledBy:   "system",
+		InstalledOn:   time.Now(),
+		ExecutionTime: int(time.Since(startTime).Milliseconds()),
+		Success:       true,
+	}
+
+	if err := tx.Create(migration).Error; err != nil {
+		tx.Rollback()
+		return fmt.Errorf("记录版本信息失败: %v", err)
+	}
+
+	// 提交事务
+	if err := tx.Commit().Error; err != nil {
+		return fmt.Errorf("提交事务失败: %v", err)
+	}
+
+	return nil
+}
+
+// processSQLFile 处理单个SQL文件
+func (s *MigrationService) processSQLFile(file string, executedVersions map[string]*Migration) error {
+	filename := filepath.Base(file)
+	migrationLog("解析 SQL 文件: %s", filename)
+
+	// 解析版本信息
+	version, description, err := parseScriptVersion(filename)
+	if err != nil {
+		migrationLog("解析 SQL 版本信息失败: %v", err)
+		return err
+	}
+
+	// 检查是否已经执行过
+	if executed, ok := executedVersions[version]; ok {
+		migrationLog("SQL 文件已执行，检查文件校验和: %s", filename)
+		if err := s.validateChecksum(file, executed); err != nil {
+			return err
+		}
+		migrationLog("SQL 文件 %s 校验和验证通过，跳过执行", version)
+		return nil
+	}
+
+	// 执行脚本文件
+	return s.executeScriptFile(file, version, description, filename)
+}
+
 // Migrate 执行数据库迁移
 func (s *MigrationService) Migrate(scriptDir string) error {
 	migrationLog("开始执行数据库迁移，SQL 目录: %s", scriptDir)
@@ -190,80 +282,8 @@ func (s *MigrationService) Migrate(scriptDir string) error {
 
 	// 遍历所有SQL文件
 	for _, file := range files {
-		filename := filepath.Base(file)
-		migrationLog("解析 SQL 文件: %s", filename)
-
-		// 解析版本信息
-		version, description, err := parseScriptVersion(filename)
-		if err != nil {
-			migrationLog("解析 SQL 版本信息失败: %v", err)
+		if err := s.processSQLFile(file, executedVersions); err != nil {
 			return err
-		}
-
-		// 检查是否已经执行过
-		if executed, ok := executedVersions[version]; ok {
-			migrationLog("SQL 文件已执行，检查文件校验和: %s", filename)
-
-			// 读取SQL文件内容并验证校验和
-			content, err := os.ReadFile(file)
-			if err != nil {
-				migrationLog("读取 SQL 文件失败: %v", err)
-				return fmt.Errorf("读取 SQL 文件失败: %v", err)
-			}
-
-			checksum := fmt.Sprintf("%x", md5.Sum(content))
-			if checksum != executed.Checksum {
-				migrationLog("SQL 文件 %s 已被修改，期望校验和: %s, 实际校验和: %s", filename, executed.Checksum, checksum)
-				migrationLog("警告：跳过校验和检查，继续执行")
-				// return fmt.Errorf("SQL 文件 %s 已被修改", filename)
-			}
-			migrationLog("SQL 文件 %s 校验和验证通过，跳过执行", version)
-			continue
-		}
-
-		migrationLog("开始执行版本 %s", version)
-
-		// 读取SQL文件内容
-		content, err := os.ReadFile(file)
-		if err != nil {
-			migrationLog("读取 SQL 文件失败: %v", err)
-			return fmt.Errorf("读取 SQL 文件失败: %v", err)
-		}
-
-		// 开始事务
-		tx := s.db.Begin()
-		if tx.Error != nil {
-			return fmt.Errorf("开始事务失败: %v", tx.Error)
-		}
-
-		// 分割并执行SQL语句
-		startTime := time.Now()
-		statements := splitSQLStatements(string(content))
-		if err := s.executeSQLStatements(statements); err != nil {
-			tx.Rollback()
-			return fmt.Errorf("执行SQL失败: %v", err)
-		}
-
-		// 记录执行结果
-		migration := &Migration{
-			Version:       version,
-			Description:   description,
-			Script:        filename,
-			Checksum:      fmt.Sprintf("%x", md5.Sum(content)),
-			InstalledBy:   "system",
-			InstalledOn:   time.Now(),
-			ExecutionTime: int(time.Since(startTime).Milliseconds()),
-			Success:       true,
-		}
-
-		if err := tx.Create(migration).Error; err != nil {
-			tx.Rollback()
-			return fmt.Errorf("记录版本信息失败: %v", err)
-		}
-
-		// 提交事务
-		if err := tx.Commit().Error; err != nil {
-			return fmt.Errorf("提交事务失败: %v", err)
 		}
 	}
 
