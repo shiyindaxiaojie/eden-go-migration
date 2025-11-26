@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -110,6 +111,21 @@ func parseScriptVersion(filename string) (version, description string, err error
 		return "", "", fmt.Errorf("无效的脚本文件名格式: %s", filename)
 	}
 	return matches[1], matches[2], nil
+}
+
+// compareVersions 比较版本号 v1 < v2 返回 true
+func compareVersions(v1, v2 string) bool {
+	parts1 := strings.Split(v1, ".")
+	parts2 := strings.Split(v2, ".")
+
+	for i := 0; i < len(parts1) && i < len(parts2); i++ {
+		n1, _ := strconv.Atoi(parts1[i])
+		n2, _ := strconv.Atoi(parts2[i])
+		if n1 != n2 {
+			return n1 < n2
+		}
+	}
+	return len(parts1) < len(parts2)
 }
 
 // isVersionTableExists 检查版本表是否存在
@@ -277,8 +293,16 @@ func (s *MigrationService) Migrate(scriptDir string) error {
 		return fmt.Errorf("读取 SQL 文件失败: %v", err)
 	}
 
-	// 按文件名排序
-	sort.Strings(files)
+	// 按版本号排序
+	sort.Slice(files, func(i, j int) bool {
+		v1, _, err1 := parseScriptVersion(filepath.Base(files[i]))
+		v2, _, err2 := parseScriptVersion(filepath.Base(files[j]))
+
+		if err1 == nil && err2 == nil {
+			return compareVersions(v1, v2)
+		}
+		return files[i] < files[j]
+	})
 
 	// 遍历所有SQL文件
 	for _, file := range files {
