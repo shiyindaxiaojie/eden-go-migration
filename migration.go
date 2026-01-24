@@ -102,60 +102,19 @@ func splitSQLStatements(content string) []string {
 	return statements
 }
 
-// parseVersionParts 解析版本号各部分为整数数组
-func parseVersionParts(version string) []int {
-	parts := strings.Split(version, ".")
-	result := make([]int, len(parts))
-	for i, p := range parts {
-		val, err := strconv.Atoi(p)
-		if err != nil {
-			result[i] = 0
-		} else {
-			result[i] = val
+// compareVersions 比较版本号 v1 < v2 返回 true
+func compareVersions(v1, v2 string) bool {
+	parts1 := strings.Split(v1, ".")
+	parts2 := strings.Split(v2, ".")
+
+	for i := 0; i < len(parts1) && i < len(parts2); i++ {
+		n1, _ := strconv.Atoi(parts1[i])
+		n2, _ := strconv.Atoi(parts2[i])
+		if n1 != n2 {
+			return n1 < n2
 		}
 	}
-	return result
-}
-
-// compareVersions 比较两个版本号，返回 -1, 0, 1
-// a < b 返回 -1, a == b 返回 0, a > b 返回 1
-func compareVersions(a, b string) int {
-	partsA := parseVersionParts(a)
-	partsB := parseVersionParts(b)
-
-	// 确保两个数组长度一致
-	maxLen := len(partsA)
-	if len(partsB) > maxLen {
-		maxLen = len(partsB)
-	}
-
-	for i := 0; i < maxLen; i++ {
-		var valA, valB int
-		if i < len(partsA) {
-			valA = partsA[i]
-		}
-		if i < len(partsB) {
-			valB = partsB[i]
-		}
-
-		if valA < valB {
-			return -1
-		}
-		if valA > valB {
-			return 1
-		}
-	}
-	return 0
-}
-
-// extractVersionFromFile 从文件路径提取版本号
-func extractVersionFromFile(file string) string {
-	filename := filepath.Base(file)
-	version, _, err := parseScriptVersion(filename)
-	if err != nil {
-		return ""
-	}
-	return version
+	return len(parts1) < len(parts2)
 }
 
 // parseScriptVersion 解析脚本版本信息
@@ -334,17 +293,21 @@ func (s *MigrationService) Migrate(scriptDir string) error {
 		return fmt.Errorf("failed to read SQL files: %v", err)
 	}
 
-	// 按文件名排序
-	// 按版本号语义化排序
+	// Sort by version number
 	sort.Slice(files, func(i, j int) bool {
-		verI := extractVersionFromFile(files[i])
-		verJ := extractVersionFromFile(files[j])
-		return compareVersions(verI, verJ) < 0
+		v1, _, err1 := parseScriptVersion(filepath.Base(files[i]))
+		v2, _, err2 := parseScriptVersion(filepath.Base(files[j]))
+
+		if err1 == nil && err2 == nil {
+			return compareVersions(v1, v2)
+		}
+		return files[i] < files[j]
 	})
 
 	migrationLog("All scanned SQL scripts (sorted by version):")
 	for _, f := range files {
-		migrationLog("  - %s (version: %s)", filepath.Base(f), extractVersionFromFile(f))
+		v, _, _ := parseScriptVersion(filepath.Base(f))
+		migrationLog("  - %s (version: %s)", filepath.Base(f), v)
 	}
 
 	// 遍历所有SQL文件
