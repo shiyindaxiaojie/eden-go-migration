@@ -102,17 +102,6 @@ func splitSQLStatements(content string) []string {
 	return statements
 }
 
-// parseScriptVersion 解析脚本版本信息
-func parseScriptVersion(filename string) (version, description string, err error) {
-	// Flyway命名格式: V1.0.0__Description.sql
-	pattern := regexp.MustCompile(`^V(\d+\.\d+\.\d+)__(.+)\.sql$`)
-	matches := pattern.FindStringSubmatch(filename)
-	if len(matches) != 3 {
-		return "", "", fmt.Errorf("无效的脚本文件名格式: %s", filename)
-	}
-	return matches[1], matches[2], nil
-}
-
 // compareVersions 比较版本号 v1 < v2 返回 true
 func compareVersions(v1, v2 string) bool {
 	parts1 := strings.Split(v1, ".")
@@ -126,6 +115,17 @@ func compareVersions(v1, v2 string) bool {
 		}
 	}
 	return len(parts1) < len(parts2)
+}
+
+// parseScriptVersion 解析脚本版本信息
+func parseScriptVersion(filename string) (version, description string, err error) {
+	// Flyway命名格式: V1.0.0__Description.sql
+	pattern := regexp.MustCompile(`^V(\d+\.\d+\.\d+)__(.+)\.sql$`)
+	matches := pattern.FindStringSubmatch(filename)
+	if len(matches) != 3 {
+		return "", "", fmt.Errorf("invalid script filename format: %s", filename)
+	}
+	return matches[1], matches[2], nil
 }
 
 // isVersionTableExists 检查版本表是否存在
@@ -142,7 +142,7 @@ func (s *MigrationService) createVersionTable() error {
 func (s *MigrationService) getExecutedVersions() (map[string]*Migration, error) {
 	var migrations []*Migration
 	if err := s.db.Where("success = ?", true).Find(&migrations).Error; err != nil {
-		return nil, fmt.Errorf("获取已执行版本记录失败: %v", err)
+		return nil, fmt.Errorf("failed to get executed version records: %v", err)
 	}
 
 	versionMap := make(map[string]*Migration)
@@ -159,7 +159,7 @@ func (s *MigrationService) executeSQLStatements(statements []string) error {
 			continue
 		}
 		if err := s.db.Exec(stmt).Error; err != nil {
-			return fmt.Errorf("执行SQL语句失败: %v\nSQL: %s", err, stmt)
+			return fmt.Errorf("failed to execute SQL statement: %v\nSQL: %s", err, stmt)
 		}
 	}
 	return nil
@@ -169,33 +169,33 @@ func (s *MigrationService) executeSQLStatements(statements []string) error {
 func (s *MigrationService) validateChecksum(file string, executed *Migration) error {
 	content, err := os.ReadFile(file)
 	if err != nil {
-		migrationLog("读取 SQL 文件失败: %v", err)
-		return fmt.Errorf("读取 SQL 文件失败: %v", err)
+		migrationLog("failed to read SQL file: %v", err)
+		return fmt.Errorf("failed to read SQL file: %v", err)
 	}
 
 	checksum := fmt.Sprintf("%x", md5.Sum(content))
 	if checksum != executed.Checksum {
-		migrationLog("SQL 文件 %s 已被修改，期望校验和: %s, 实际校验和: %s", filepath.Base(file), executed.Checksum, checksum)
-		migrationLog("警告：跳过校验和检查，继续执行")
+		migrationLog("SQL file %s has been modified, expected checksum: %s, actual checksum: %s", filepath.Base(file), executed.Checksum, checksum)
+		migrationLog("Warning: skipping checksum check, continuing execution")
 	}
 	return nil
 }
 
 // executeScriptFile 执行单个脚本文件
 func (s *MigrationService) executeScriptFile(file, version, description, filename string) error {
-	migrationLog("开始执行版本 %s", version)
+	migrationLog("Starting execution of version %s", version)
 
 	// 读取SQL文件内容
 	content, err := os.ReadFile(file)
 	if err != nil {
-		migrationLog("读取 SQL 文件失败: %v", err)
-		return fmt.Errorf("读取 SQL 文件失败: %v", err)
+		migrationLog("failed to read SQL file: %v", err)
+		return fmt.Errorf("failed to read SQL file: %v", err)
 	}
 
 	// 开始事务
 	tx := s.db.Begin()
 	if tx.Error != nil {
-		return fmt.Errorf("开始事务失败: %v", tx.Error)
+		return fmt.Errorf("failed to start transaction: %v", tx.Error)
 	}
 
 	// 分割并执行SQL语句
@@ -203,7 +203,7 @@ func (s *MigrationService) executeScriptFile(file, version, description, filenam
 	statements := splitSQLStatements(string(content))
 	if err := s.executeSQLStatements(statements); err != nil {
 		tx.Rollback()
-		return fmt.Errorf("执行SQL失败: %v", err)
+		return fmt.Errorf("failed to execute SQL: %v", err)
 	}
 
 	// 记录执行结果
@@ -220,12 +220,12 @@ func (s *MigrationService) executeScriptFile(file, version, description, filenam
 
 	if err := tx.Create(migration).Error; err != nil {
 		tx.Rollback()
-		return fmt.Errorf("记录版本信息失败: %v", err)
+		return fmt.Errorf("failed to record version info: %v", err)
 	}
 
 	// 提交事务
 	if err := tx.Commit().Error; err != nil {
-		return fmt.Errorf("提交事务失败: %v", err)
+		return fmt.Errorf("failed to commit transaction: %v", err)
 	}
 
 	return nil
@@ -234,22 +234,21 @@ func (s *MigrationService) executeScriptFile(file, version, description, filenam
 // processSQLFile 处理单个SQL文件
 func (s *MigrationService) processSQLFile(file string, executedVersions map[string]*Migration) error {
 	filename := filepath.Base(file)
-	migrationLog("解析 SQL 文件: %s", filename)
+	migrationLog("Parsing SQL file: %s", filename)
 
-	// 解析版本信息
 	version, description, err := parseScriptVersion(filename)
 	if err != nil {
-		migrationLog("解析 SQL 版本信息失败: %v", err)
+		migrationLog("failed to parse SQL version info: %v", err)
 		return err
 	}
 
 	// 检查是否已经执行过
 	if executed, ok := executedVersions[version]; ok {
-		migrationLog("SQL 文件已执行，检查文件校验和: %s", filename)
+		migrationLog("SQL file already executed, checking file checksum: %s", filename)
 		if err := s.validateChecksum(file, executed); err != nil {
 			return err
 		}
-		migrationLog("SQL 文件 %s 校验和验证通过，跳过执行", version)
+		migrationLog("SQL file %s checksum verification passed, skipping execution", version)
 		return nil
 	}
 
@@ -259,41 +258,42 @@ func (s *MigrationService) processSQLFile(file string, executedVersions map[stri
 
 // Migrate 执行数据库迁移
 func (s *MigrationService) Migrate(scriptDir string) error {
-	migrationLog("开始执行数据库迁移，SQL 目录: %s", scriptDir)
+	migrationLog("Starting database migration, SQL directory: %s", scriptDir)
 
 	// 检查版本表是否存在
 	exists, err := s.isVersionTableExists()
 	if err != nil {
-		migrationLog("检查版本表是否存在失败: %v", err)
-		return fmt.Errorf("检查版本表是否存在失败: %v", err)
+		migrationLog("failed to check if version table exists: %v", err)
+		return fmt.Errorf("failed to check if version table exists: %v", err)
 	}
 
 	// 如果版本表不存在，创建它
 	if !exists {
-		migrationLog("版本表不存在，开始创建")
+		migrationLog("Version table does not exist, starting creation")
 		if err := s.createVersionTable(); err != nil {
-			migrationLog("创建版本表失败: %v", err)
-			return fmt.Errorf("创建版本表失败: %v", err)
+			migrationLog("failed to create version table: %v", err)
+			return fmt.Errorf("failed to create version table: %v", err)
 		}
-		migrationLog("版本表创建成功")
+		migrationLog("Version table created successfully")
 	}
 
-	// 获取已执行的版本记录
 	executedVersions, err := s.getExecutedVersions()
 	if err != nil {
-		migrationLog("获取已执行的版本记录失败: %v", err)
+		migrationLog("failed to get executed version records: %v", err)
 		return err
 	}
-	migrationLog("已执行的 SQL 文件数量: %d", len(executedVersions))
-
-	// 获取所有SQL文件
-	files, err := filepath.Glob(filepath.Join(scriptDir, "V*.sql"))
-	if err != nil {
-		migrationLog("读取 SQL 文件失败: %v", err)
-		return fmt.Errorf("读取 SQL 文件失败: %v", err)
+	migrationLog("Versions already recorded in database (total %d):", len(executedVersions))
+	for v := range executedVersions {
+		migrationLog("  - %s", v)
 	}
 
-	// 按版本号排序
+	files, err := filepath.Glob(filepath.Join(scriptDir, "V*.sql"))
+	if err != nil {
+		migrationLog("failed to read SQL files: %v", err)
+		return fmt.Errorf("failed to read SQL files: %v", err)
+	}
+
+	// Sort by version number
 	sort.Slice(files, func(i, j int) bool {
 		v1, _, err1 := parseScriptVersion(filepath.Base(files[i]))
 		v2, _, err2 := parseScriptVersion(filepath.Base(files[j]))
@@ -304,6 +304,12 @@ func (s *MigrationService) Migrate(scriptDir string) error {
 		return files[i] < files[j]
 	})
 
+	migrationLog("All scanned SQL scripts (sorted by version):")
+	for _, f := range files {
+		v, _, _ := parseScriptVersion(filepath.Base(f))
+		migrationLog("  - %s (version: %s)", filepath.Base(f), v)
+	}
+
 	// 遍历所有SQL文件
 	for _, file := range files {
 		if err := s.processSQLFile(file, executedVersions); err != nil {
@@ -311,6 +317,6 @@ func (s *MigrationService) Migrate(scriptDir string) error {
 		}
 	}
 
-	migrationLog("数据库迁移完成")
+	migrationLog("Database migration completed")
 	return nil
 }

@@ -1,7 +1,6 @@
 # Eden Go Migration
 
-[![Go Report Card](https://goreportcard.com/badge/github.com/shiyindaxiaojie/eden-go-migration)](https://goreportcard.com/report/github.com/shiyindaxiaojie/eden-go-migration)
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![Go Report Card](https://goreportcard.com/badge/github.com/shiyindaxiaojie/eden-go-migration)](https://goreportcard.com/report/github.com/shiyindaxiaojie/eden-go-migration) [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
 English | [中文](README_zh-CN.md)
 
