@@ -11,6 +11,7 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
+	"gorm.io/gorm/schema"
 )
 
 // DB 数据库实例
@@ -49,6 +50,9 @@ func InitDB(cfg *DatabaseConfig) (*DB, error) {
 	gormConfig := &gorm.Config{
 		Logger:                                   newLogger,
 		DisableForeignKeyConstraintWhenMigrating: true, // 禁用外键约束
+		NamingStrategy: schema.NamingStrategy{
+			SingularTable: cfg.SingularTable,
+		},
 	}
 
 	// 根据驱动类型选择对应的 dialector

@@ -6,14 +6,15 @@ import (
 
 // DatabaseConfig 数据库配置
 type DatabaseConfig struct {
-	Driver       string `json:"driver" mapstructure:"driver"` // mysql, postgres, sqlite
-	Host         string `json:"host" mapstructure:"host"`
-	Port         int    `json:"port" mapstructure:"port"`
-	Username     string `json:"username" mapstructure:"username"`
-	Password     string `json:"password" mapstructure:"password"`
-	DBName       string `json:"db_name" mapstructure:"db_name"`
-	MaxIdleConns int    `json:"max_idle_conns" mapstructure:"max_idle_conns"`
-	MaxOpenConns int    `json:"max_open_conns" mapstructure:"max_open_conns"`
+	Driver        string `json:"driver" mapstructure:"driver"` // mysql, postgres, sqlite
+	Host          string `json:"host" mapstructure:"host"`
+	Port          int    `json:"port" mapstructure:"port"`
+	Username      string `json:"username" mapstructure:"username"`
+	Password      string `json:"password" mapstructure:"password"`
+	DBName        string `json:"db_name" mapstructure:"db_name"`
+	MaxIdleConns  int    `json:"max_idle_conns" mapstructure:"max_idle_conns"`
+	MaxOpenConns  int    `json:"max_open_conns" mapstructure:"max_open_conns"`
+	SingularTable bool   `json:"singular_table" mapstructure:"singular_table"`
 }
 
 // DefaultDatabaseConfig 默认数据库配置
