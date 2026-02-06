@@ -297,10 +297,6 @@ func (s *MigrationService) Migrate(scriptDir string) error {
 		s.log("failed to get executed version records: %v", err)
 		return err
 	}
-	s.log("Versions already recorded in database (total %d):", len(executedVersions))
-	for v := range executedVersions {
-		s.log("  - %s", v)
-	}
 
 	files, err := filepath.Glob(filepath.Join(scriptDir, "V*.sql"))
 	if err != nil {
