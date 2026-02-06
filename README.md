@@ -98,6 +98,15 @@ cfg := &migration.DatabaseConfig{
 }
 ```
 
+### 3. Logging Configuration
+
+By default, logs only show timestamp and message. For debugging, you can enable code line numbers:
+
+```go
+svc := migration.NewMigrationService(migDB)
+svc.SetIncludeLocation(true) // Enable code location (e.g., migration.go:251)
+```
+
 ## ⚙️ Configuration
 
 The `DatabaseConfig` struct supports the following options:

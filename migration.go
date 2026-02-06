@@ -38,20 +38,35 @@ func (Migration) TableName() string {
 
 // MigrationService 迁移服务
 type MigrationService struct {
-	db *gorm.DB
+	db              *gorm.DB
+	includeLocation bool
 }
 
 // NewMigrationService 创建迁移服务
 func NewMigrationService(db *DB) *MigrationService {
-	return &MigrationService{db: db.DB}
+	return &MigrationService{
+		db:              db.DB,
+		includeLocation: false, // Default to false as requested
+	}
 }
 
-// migrationLog 迁移日志函数
-func migrationLog(format string, args ...interface{}) {
+// SetIncludeLocation 设置是否打印代码行号
+func (s *MigrationService) SetIncludeLocation(include bool) {
+	s.includeLocation = include
+}
+
+// log 迁移日志函数
+func (s *MigrationService) log(format string, args ...interface{}) {
 	timestamp := time.Now().Format("2006/01/02 15:04:05.000")
-	_, file, line, _ := runtime.Caller(1)
-	fileName := filepath.Base(file)
-	fmt.Printf("%s %s:%d %s\n", timestamp, fileName, line, fmt.Sprintf(format, args...))
+	msg := fmt.Sprintf(format, args...)
+
+	if s.includeLocation {
+		_, file, line, _ := runtime.Caller(1)
+		fileName := filepath.Base(file)
+		fmt.Printf("%s %s:%d %s\n", timestamp, fileName, line, msg)
+	} else {
+		fmt.Printf("%s %s\n", timestamp, msg)
+	}
 }
 
 // splitSQLStatements 分割SQL语句
@@ -169,26 +184,26 @@ func (s *MigrationService) executeSQLStatements(statements []string) error {
 func (s *MigrationService) validateChecksum(file string, executed *Migration) error {
 	content, err := os.ReadFile(file)
 	if err != nil {
-		migrationLog("failed to read SQL file: %v", err)
+		s.log("failed to read SQL file: %v", err)
 		return fmt.Errorf("failed to read SQL file: %v", err)
 	}
 
 	checksum := fmt.Sprintf("%x", md5.Sum(content))
 	if checksum != executed.Checksum {
-		migrationLog("SQL file %s has been modified, expected checksum: %s, actual checksum: %s", filepath.Base(file), executed.Checksum, checksum)
-		migrationLog("Warning: skipping checksum check, continuing execution")
+		s.log("SQL file %s has been modified, expected checksum: %s, actual checksum: %s", filepath.Base(file), executed.Checksum, checksum)
+		s.log("Warning: skipping checksum check, continuing execution")
 	}
 	return nil
 }
 
 // executeScriptFile 执行单个脚本文件
 func (s *MigrationService) executeScriptFile(file, version, description, filename string) error {
-	migrationLog("Starting execution of version %s", version)
+	s.log("Starting execution of version %s", version)
 
 	// 读取SQL文件内容
 	content, err := os.ReadFile(file)
 	if err != nil {
-		migrationLog("failed to read SQL file: %v", err)
+		s.log("failed to read SQL file: %v", err)
 		return fmt.Errorf("failed to read SQL file: %v", err)
 	}
 
@@ -234,21 +249,21 @@ func (s *MigrationService) executeScriptFile(file, version, description, filenam
 // processSQLFile 处理单个SQL文件
 func (s *MigrationService) processSQLFile(file string, executedVersions map[string]*Migration) error {
 	filename := filepath.Base(file)
-	migrationLog("Parsing SQL file: %s", filename)
+	s.log("Parsing SQL file: %s", filename)
 
 	version, description, err := parseScriptVersion(filename)
 	if err != nil {
-		migrationLog("failed to parse SQL version info: %v", err)
+		s.log("failed to parse SQL version info: %v", err)
 		return err
 	}
 
 	// 检查是否已经执行过
 	if executed, ok := executedVersions[version]; ok {
-		migrationLog("SQL file already executed, checking file checksum: %s", filename)
+		s.log("SQL file already executed, checking file checksum: %s", filename)
 		if err := s.validateChecksum(file, executed); err != nil {
 			return err
 		}
-		migrationLog("SQL file %s checksum verification passed, skipping execution", version)
+		s.log("SQL file %s checksum verification passed, skipping execution", version)
 		return nil
 	}
 
@@ -258,38 +273,38 @@ func (s *MigrationService) processSQLFile(file string, executedVersions map[stri
 
 // Migrate 执行数据库迁移
 func (s *MigrationService) Migrate(scriptDir string) error {
-	migrationLog("Starting database migration, SQL directory: %s", scriptDir)
+	s.log("Starting database migration, SQL directory: %s", scriptDir)
 
 	// 检查版本表是否存在
 	exists, err := s.isVersionTableExists()
 	if err != nil {
-		migrationLog("failed to check if version table exists: %v", err)
+		s.log("failed to check if version table exists: %v", err)
 		return fmt.Errorf("failed to check if version table exists: %v", err)
 	}
 
 	// 如果版本表不存在，创建它
 	if !exists {
-		migrationLog("Version table does not exist, starting creation")
+		s.log("Version table does not exist, starting creation")
 		if err := s.createVersionTable(); err != nil {
-			migrationLog("failed to create version table: %v", err)
+			s.log("failed to create version table: %v", err)
 			return fmt.Errorf("failed to create version table: %v", err)
 		}
-		migrationLog("Version table created successfully")
+		s.log("Version table created successfully")
 	}
 
 	executedVersions, err := s.getExecutedVersions()
 	if err != nil {
-		migrationLog("failed to get executed version records: %v", err)
+		s.log("failed to get executed version records: %v", err)
 		return err
 	}
-	migrationLog("Versions already recorded in database (total %d):", len(executedVersions))
+	s.log("Versions already recorded in database (total %d):", len(executedVersions))
 	for v := range executedVersions {
-		migrationLog("  - %s", v)
+		s.log("  - %s", v)
 	}
 
 	files, err := filepath.Glob(filepath.Join(scriptDir, "V*.sql"))
 	if err != nil {
-		migrationLog("failed to read SQL files: %v", err)
+		s.log("failed to read SQL files: %v", err)
 		return fmt.Errorf("failed to read SQL files: %v", err)
 	}
 
@@ -304,10 +319,10 @@ func (s *MigrationService) Migrate(scriptDir string) error {
 		return files[i] < files[j]
 	})
 
-	migrationLog("All scanned SQL scripts (sorted by version):")
+	s.log("All scanned SQL scripts (sorted by version):")
 	for _, f := range files {
 		v, _, _ := parseScriptVersion(filepath.Base(f))
-		migrationLog("  - %s (version: %s)", filepath.Base(f), v)
+		s.log("  - %s (version: %s)", filepath.Base(f), v)
 	}
 
 	// 遍历所有SQL文件
@@ -317,6 +332,6 @@ func (s *MigrationService) Migrate(scriptDir string) error {
 		}
 	}
 
-	migrationLog("Database migration completed")
+	s.log("Database migration completed")
 	return nil
 }

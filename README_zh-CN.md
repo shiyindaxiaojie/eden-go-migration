@@ -74,6 +74,15 @@ func main() {
 }
 ```
 
+### 3. 日志配置
+
+默认情况下，日志只显示时间戳和消息。如果你需要调试，可以开启代码行号显示：
+
+```go
+svc := migration.NewMigrationService(migDB)
+svc.SetIncludeLocation(true) // 开启代码位置显示 (e.g., migration.go:251)
+```
+
 ## ⚙️ 配置
 
 `DatabaseConfig` 结构体支持以下配置项：
