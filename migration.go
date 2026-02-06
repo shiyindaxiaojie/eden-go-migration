@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -36,10 +35,25 @@ func (Migration) TableName() string {
 	return "sys_db_version"
 }
 
+// Logger interfaces for external loggers
+type Logger interface {
+	Printf(format string, args ...interface{})
+}
+
+// StdLogger default logger implementation using fmt
+type StdLogger struct{}
+
+func (l *StdLogger) Printf(format string, args ...interface{}) {
+	timestamp := time.Now().Format("2006/01/02 15:04:05.000")
+	msg := fmt.Sprintf(format, args...)
+	fmt.Printf("%s %s\n", timestamp, msg)
+}
+
 // MigrationService 迁移服务
 type MigrationService struct {
 	db              *gorm.DB
 	includeLocation bool
+	logger          Logger
 }
 
 // NewMigrationService 创建迁移服务
@@ -47,6 +61,7 @@ func NewMigrationService(db *DB) *MigrationService {
 	return &MigrationService{
 		db:              db.DB,
 		includeLocation: false, // Default to false as requested
+		logger:          &StdLogger{},
 	}
 }
 
@@ -55,17 +70,15 @@ func (s *MigrationService) SetIncludeLocation(include bool) {
 	s.includeLocation = include
 }
 
-// log 迁移日志函数
-func (s *MigrationService) log(format string, args ...interface{}) {
-	timestamp := time.Now().Format("2006/01/02 15:04:05.000")
-	msg := fmt.Sprintf(format, args...)
+// SetLogger 设置自定义日志器
+func (s *MigrationService) SetLogger(l Logger) {
+	s.logger = l
+}
 
-	if s.includeLocation {
-		_, file, line, _ := runtime.Caller(1)
-		fileName := filepath.Base(file)
-		fmt.Printf("%s %s:%d %s\n", timestamp, fileName, line, msg)
-	} else {
-		fmt.Printf("%s %s\n", timestamp, msg)
+// log 迁移日志函数 (internal helper to delegate to interface)
+func (s *MigrationService) log(format string, args ...interface{}) {
+	if s.logger != nil {
+		s.logger.Printf(format, args...)
 	}
 }
 
