@@ -14,7 +14,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// Migration 数据库版本迁移记录
+// Migration database version migration record
 type Migration struct {
 	ID            int64      `json:"id" gorm:"primaryKey"`
 	Version       string     `json:"version" gorm:"size:50;not null;unique"`
@@ -30,7 +30,7 @@ type Migration struct {
 	DeletedAt     *time.Time `json:"deletedAt" gorm:"index"`
 }
 
-// TableName 表名
+// TableName table name
 func (Migration) TableName() string {
 	return "sys_db_version"
 }
@@ -49,14 +49,14 @@ func (l *StdLogger) Printf(format string, args ...interface{}) {
 	fmt.Printf("%s %s\n", timestamp, msg)
 }
 
-// MigrationService 迁移服务
+// MigrationService migration service
 type MigrationService struct {
 	db              *gorm.DB
 	includeLocation bool
 	logger          Logger
 }
 
-// NewMigrationService 创建迁移服务
+// NewMigrationService creates a migration service
 func NewMigrationService(db *DB) *MigrationService {
 	return &MigrationService{
 		db:              db.DB,
@@ -65,30 +65,30 @@ func NewMigrationService(db *DB) *MigrationService {
 	}
 }
 
-// SetIncludeLocation 设置是否打印代码行号
+// SetIncludeLocation sets whether to print code line numbers
 func (s *MigrationService) SetIncludeLocation(include bool) {
 	s.includeLocation = include
 }
 
-// SetLogger 设置自定义日志器
+// SetLogger sets a custom logger
 func (s *MigrationService) SetLogger(l Logger) {
 	s.logger = l
 }
 
-// log 迁移日志函数 (internal helper to delegate to interface)
+// log migration logging function (internal helper to delegate to interface)
 func (s *MigrationService) log(format string, args ...interface{}) {
 	if s.logger != nil {
 		s.logger.Printf(format, args...)
 	}
 }
 
-// splitSQLStatements 分割SQL语句
+// splitSQLStatements splits SQL statements
 func splitSQLStatements(content string) []string {
-	// 移除注释
+	// Remove comments
 	content = regexp.MustCompile(`--.*$`).ReplaceAllString(content, "")
 	content = regexp.MustCompile(`/\*[\s\S]*?\*/`).ReplaceAllString(content, "")
 
-	// 分割SQL语句
+	// Split SQL statements
 	statements := make([]string, 0)
 	var currentStmt strings.Builder
 	var inString bool
@@ -121,7 +121,7 @@ func splitSQLStatements(content string) []string {
 		}
 	}
 
-	// 添加最后一个语句（如果有）
+	// Add the last statement (if any)
 	lastStmt := strings.TrimSpace(currentStmt.String())
 	if lastStmt != "" {
 		statements = append(statements, lastStmt)
@@ -130,7 +130,7 @@ func splitSQLStatements(content string) []string {
 	return statements
 }
 
-// compareVersions 比较版本号 v1 < v2 返回 true
+// compareVersions compares version numbers, returns true if v1 < v2
 func compareVersions(v1, v2 string) bool {
 	parts1 := strings.Split(v1, ".")
 	parts2 := strings.Split(v2, ".")
@@ -145,9 +145,9 @@ func compareVersions(v1, v2 string) bool {
 	return len(parts1) < len(parts2)
 }
 
-// parseScriptVersion 解析脚本版本信息
+// parseScriptVersion parses script version information
 func parseScriptVersion(filename string) (version, description string, err error) {
-	// Flyway命名格式: V1.0.0__Description.sql
+	// Flyway naming format: V1.0.0__Description.sql
 	pattern := regexp.MustCompile(`^V(\d+\.\d+\.\d+)__(.+)\.sql$`)
 	matches := pattern.FindStringSubmatch(filename)
 	if len(matches) != 3 {
@@ -156,17 +156,17 @@ func parseScriptVersion(filename string) (version, description string, err error
 	return matches[1], matches[2], nil
 }
 
-// isVersionTableExists 检查版本表是否存在
+// isVersionTableExists checks if the version table exists
 func (s *MigrationService) isVersionTableExists() (bool, error) {
 	return s.db.Migrator().HasTable(&Migration{}), nil
 }
 
-// createVersionTable 创建版本表
+// createVersionTable creates the version table
 func (s *MigrationService) createVersionTable() error {
 	return s.db.AutoMigrate(&Migration{})
 }
 
-// getExecutedVersions 获取已执行的版本记录
+// getExecutedVersions retrieves executed version records
 func (s *MigrationService) getExecutedVersions() (map[string]*Migration, error) {
 	var migrations []*Migration
 	if err := s.db.Where("success = ?", true).Find(&migrations).Error; err != nil {
@@ -180,7 +180,7 @@ func (s *MigrationService) getExecutedVersions() (map[string]*Migration, error) 
 	return versionMap, nil
 }
 
-// executeSQLStatements 执行SQL语句
+// executeSQLStatements executes SQL statements
 func (s *MigrationService) executeSQLStatements(statements []string) error {
 	for _, stmt := range statements {
 		if strings.TrimSpace(stmt) == "" {
@@ -193,7 +193,7 @@ func (s *MigrationService) executeSQLStatements(statements []string) error {
 	return nil
 }
 
-// validateChecksum 验证已执行脚本的校验和
+// validateChecksum validates the checksum of executed scripts
 func (s *MigrationService) validateChecksum(file string, executed *Migration) error {
 	content, err := os.ReadFile(file)
 	if err != nil {
@@ -209,24 +209,24 @@ func (s *MigrationService) validateChecksum(file string, executed *Migration) er
 	return nil
 }
 
-// executeScriptFile 执行单个脚本文件
+// executeScriptFile executes a single script file
 func (s *MigrationService) executeScriptFile(file, version, description, filename string) error {
 	s.log("Starting execution of version %s", version)
 
-	// 读取SQL文件内容
+	// Read SQL file content
 	content, err := os.ReadFile(file)
 	if err != nil {
 		s.log("failed to read SQL file: %v", err)
 		return fmt.Errorf("failed to read SQL file: %v", err)
 	}
 
-	// 开始事务
+	// Start transaction
 	tx := s.db.Begin()
 	if tx.Error != nil {
 		return fmt.Errorf("failed to start transaction: %v", tx.Error)
 	}
 
-	// 分割并执行SQL语句
+	// Split and execute SQL statements
 	startTime := time.Now()
 	statements := splitSQLStatements(string(content))
 	if err := s.executeSQLStatements(statements); err != nil {
@@ -234,7 +234,7 @@ func (s *MigrationService) executeScriptFile(file, version, description, filenam
 		return fmt.Errorf("failed to execute SQL: %v", err)
 	}
 
-	// 记录执行结果
+	// Record execution result
 	migration := &Migration{
 		Version:       version,
 		Description:   description,
@@ -251,7 +251,7 @@ func (s *MigrationService) executeScriptFile(file, version, description, filenam
 		return fmt.Errorf("failed to record version info: %v", err)
 	}
 
-	// 提交事务
+	// Commit transaction
 	if err := tx.Commit().Error; err != nil {
 		return fmt.Errorf("failed to commit transaction: %v", err)
 	}
@@ -259,7 +259,7 @@ func (s *MigrationService) executeScriptFile(file, version, description, filenam
 	return nil
 }
 
-// processSQLFile 处理单个SQL文件
+// processSQLFile processes a single SQL file
 func (s *MigrationService) processSQLFile(file string, executedVersions map[string]*Migration) error {
 	filename := filepath.Base(file)
 	s.log("Parsing SQL file: %s", filename)
@@ -270,7 +270,7 @@ func (s *MigrationService) processSQLFile(file string, executedVersions map[stri
 		return err
 	}
 
-	// 检查是否已经执行过
+	// Check if already executed
 	if executed, ok := executedVersions[version]; ok {
 		s.log("SQL file already executed, checking file checksum: %s", filename)
 		if err := s.validateChecksum(file, executed); err != nil {
@@ -280,22 +280,22 @@ func (s *MigrationService) processSQLFile(file string, executedVersions map[stri
 		return nil
 	}
 
-	// 执行脚本文件
+	// Execute script file
 	return s.executeScriptFile(file, version, description, filename)
 }
 
-// Migrate 执行数据库迁移
+// Migrate executes database migration
 func (s *MigrationService) Migrate(scriptDir string) error {
 	s.log("Starting database migration, SQL directory: %s", scriptDir)
 
-	// 检查版本表是否存在
+	// Check if version table exists
 	exists, err := s.isVersionTableExists()
 	if err != nil {
 		s.log("failed to check if version table exists: %v", err)
 		return fmt.Errorf("failed to check if version table exists: %v", err)
 	}
 
-	// 如果版本表不存在，创建它
+	// If version table does not exist, create it
 	if !exists {
 		s.log("Version table does not exist, starting creation")
 		if err := s.createVersionTable(); err != nil {
@@ -334,7 +334,7 @@ func (s *MigrationService) Migrate(scriptDir string) error {
 		s.log("  - %s (version: %s)", filepath.Base(f), v)
 	}
 
-	// 遍历所有SQL文件
+	// Iterate through all SQL files
 	for _, file := range files {
 		if err := s.processSQLFile(file, executedVersions); err != nil {
 			return err

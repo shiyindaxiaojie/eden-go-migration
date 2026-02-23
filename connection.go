@@ -14,14 +14,14 @@ import (
 	"gorm.io/gorm/schema"
 )
 
-// DB 数据库实例
+// DB database instance
 type DB struct {
 	*gorm.DB
 }
 
-// InitDB 初始化数据库连接
+// InitDB initializes database connection
 func InitDB(cfg *DatabaseConfig) (*DB, error) {
-	// 使用标准 logger
+	// Use standard logger
 	newLogger := logger.New(
 		log.New(os.Stdout, "\r\n", log.LstdFlags), // io writer
 		logger.Config{
@@ -33,29 +33,29 @@ func InitDB(cfg *DatabaseConfig) (*DB, error) {
 		},
 	)
 
-	// 首先创建数据库（SQLite 不需要）
+	// First create database (SQLite does not need it)
 	if cfg.Driver != "sqlite" && cfg.Driver != "sqlite3" {
-		fmt.Printf("尝试创建数据库: %s\n", cfg.DBName)
+		fmt.Printf("Attempting to create database: %s\n", cfg.DBName)
 		if err := createDatabase(cfg); err != nil {
-			return nil, fmt.Errorf("创建数据库失败: %v", err)
+			return nil, fmt.Errorf("failed to create database: %v", err)
 		}
-		fmt.Println("数据库创建成功或已存在")
+		fmt.Println("Database created successfully or already exists")
 	}
 
 	dsn := cfg.GetDSN()
 	safeDSN := cfg.GetSafeDSN()
-	fmt.Printf("数据库连接 DSN: %s\n", safeDSN)
+	fmt.Printf("Database connection DSN: %s\n", safeDSN)
 
-	// 配置 GORM
+	// Configure GORM
 	gormConfig := &gorm.Config{
 		Logger:                                   newLogger,
-		DisableForeignKeyConstraintWhenMigrating: true, // 禁用外键约束
+		DisableForeignKeyConstraintWhenMigrating: true, // Disable foreign key constraints
 		NamingStrategy: schema.NamingStrategy{
 			SingularTable: cfg.SingularTable,
 		},
 	}
 
-	// 根据驱动类型选择对应的 dialector
+	// Select corresponding dialector based on driver type
 	var dialector gorm.Dialector
 	switch cfg.Driver {
 	case "postgres", "postgresql":
@@ -66,41 +66,41 @@ func InitDB(cfg *DatabaseConfig) (*DB, error) {
 		dialector = mysql.Open(dsn)
 	}
 
-	// 连接数据库
-	fmt.Println("尝试连接数据库")
+	// Connect to database
+	fmt.Println("Attempting to connect to database")
 	gormDB, err := gorm.Open(dialector, gormConfig)
 	if err != nil {
-		return nil, fmt.Errorf("连接数据库失败: %v", err)
+		return nil, fmt.Errorf("failed to connect to database: %v", err)
 	}
-	fmt.Println("数据库连接成功")
+	fmt.Println("Database connected successfully")
 
 	db := &DB{DB: gormDB}
 
-	// 获取底层的 *sql.DB 对象
+	// Get underlying *sql.DB object
 	sqlDB, err := gormDB.DB()
 	if err != nil {
-		return nil, fmt.Errorf("获取 *sql.DB 失败: %v", err)
+		return nil, fmt.Errorf("failed to get *sql.DB: %v", err)
 	}
 
-	// 设置连接池参数
+	// Set connection pool parameters
 	sqlDB.SetMaxIdleConns(cfg.MaxIdleConns)
 	sqlDB.SetMaxOpenConns(cfg.MaxOpenConns)
-	// 使用默认值设置连接最大生命周期
+	// Set connection max lifetime using default value
 	sqlDB.SetConnMaxLifetime(time.Hour)
 
 	return db, nil
 }
 
-// createDatabase 创建数据库
+// createDatabase creates database
 func createDatabase(cfg *DatabaseConfig) error {
-	// SQLite 不需要创建数据库
+	// SQLite does not need to create database
 	if cfg.Driver == "sqlite" || cfg.Driver == "sqlite3" {
 		return nil
 	}
 
 	dsn := cfg.GetCreateDBDSN()
 
-	// 根据驱动选择对应的 dialector
+	// Select corresponding dialector based on driver
 	var dialector gorm.Dialector
 	switch cfg.Driver {
 	case "postgres", "postgresql":
@@ -110,7 +110,7 @@ func createDatabase(cfg *DatabaseConfig) error {
 	}
 
 	db, err := gorm.Open(dialector, &gorm.Config{
-		DisableForeignKeyConstraintWhenMigrating: true, // 禁用外键约束
+		DisableForeignKeyConstraintWhenMigrating: true, // Disable foreign key constraints
 	})
 	if err != nil {
 		return err
@@ -122,15 +122,15 @@ func createDatabase(cfg *DatabaseConfig) error {
 	}
 	defer sqlDB.Close()
 
-	// 创建数据库
+	// Create database
 	var sql string
 	switch cfg.Driver {
 	case "postgres", "postgresql":
-		// PostgreSQL 需要先检查数据库是否存在
+		// PostgreSQL needs to check if database exists first
 		sql = fmt.Sprintf("CREATE DATABASE %s", cfg.DBName)
-		// 对于 PostgreSQL，如果数据库已存在会报错，我们可以忽略
+		// For PostgreSQL, ignore error if database already exists
 		if err := db.Exec(sql).Error; err != nil {
-			// 忽略"数据库已存在"的错误
+			// Ignore "database already exists" error
 			if !isDatabaseExistsError(err) {
 				return err
 			}
@@ -143,13 +143,13 @@ func createDatabase(cfg *DatabaseConfig) error {
 	return nil
 }
 
-// isDatabaseExistsError 检查是否是数据库已存在的错误
+// isDatabaseExistsError checks if it is a database already exists error
 func isDatabaseExistsError(err error) bool {
 	if err == nil {
 		return false
 	}
 	// PostgreSQL error code for duplicate database
 	return err.Error() == "pq: database \""+err.Error()+"\" already exists" ||
-		// 更通用的检查
+		// More generic check
 		err.Error() != "" && (err.Error()[len(err.Error())-15:] == "already exists")
 }

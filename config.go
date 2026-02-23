@@ -4,7 +4,7 @@ import (
 	"fmt"
 )
 
-// DatabaseConfig 数据库配置
+// DatabaseConfig database configuration
 type DatabaseConfig struct {
 	Driver        string `json:"driver" mapstructure:"driver"` // mysql, postgres, sqlite
 	Host          string `json:"host" mapstructure:"host"`
@@ -17,7 +17,7 @@ type DatabaseConfig struct {
 	SingularTable bool   `json:"singular_table" mapstructure:"singular_table"`
 }
 
-// DefaultDatabaseConfig 默认数据库配置
+// DefaultDatabaseConfig default database configuration
 func DefaultDatabaseConfig() *DatabaseConfig {
 	return &DatabaseConfig{
 		Driver:       "mysql",
@@ -31,7 +31,7 @@ func DefaultDatabaseConfig() *DatabaseConfig {
 	}
 }
 
-// GetDSN 获取数据库连接字符串
+// GetDSN gets database connection string
 func (c *DatabaseConfig) GetDSN() string {
 	switch c.Driver {
 	case "postgres", "postgresql":
@@ -51,7 +51,7 @@ func (c *DatabaseConfig) GetDSN() string {
 	}
 }
 
-// GetSafeDSN 获取安全的数据库连接字符串（隐藏密码）
+// GetSafeDSN gets safe database connection string (hides password)
 func (c *DatabaseConfig) GetSafeDSN() string {
 	switch c.Driver {
 	case "postgres", "postgresql":
@@ -65,7 +65,7 @@ func (c *DatabaseConfig) GetSafeDSN() string {
 	}
 }
 
-// GetCreateDBDSN 获取用于创建数据库的连接字符串
+// GetCreateDBDSN gets connection string for creating database
 func (c *DatabaseConfig) GetCreateDBDSN() string {
 	switch c.Driver {
 	case "postgres", "postgresql":
